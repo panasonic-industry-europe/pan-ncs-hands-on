@@ -7,14 +7,59 @@
 #include <zephyr/zephyr.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/device.h>
+#include <bluetooth/services/nus.h>
 
 static struct sensor_value sensor_values[9];
+
+#define DEVICE_NAME CONFIG_BT_DEVICE_NAME
+#define DEVICE_NAME_LEN	(sizeof(DEVICE_NAME) - 1)
+
+static const struct bt_data ad[] = {
+	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+	BT_DATA(BT_DATA_NAME_COMPLETE, DEVICE_NAME, DEVICE_NAME_LEN),
+};
+
+static const struct bt_data sd[] = {
+	BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_NUS_VAL),
+};
+
+static struct bt_conn *current_conn = NULL;
+
+static void connected(struct bt_conn *conn, uint8_t err)
+{
+	if (err) {
+		printk("Connection failed (err %u)", err);
+		return;
+	}
+	printk("Connected");
+	current_conn = bt_conn_ref(conn);
+}
+
+static void disconnected(struct bt_conn *conn, uint8_t reason)
+{
+	printk("Disconnected (reason %u)", reason);
+	bt_conn_unref(current_conn);
+	current_conn = NULL;
+}
+
+static struct bt_conn_cb conn_callbacks = {
+	.connected = connected,
+	.disconnected = disconnected
+};
 
 void main(void)
 {
 	printk("Hello World! %s\n", CONFIG_BOARD);
 
 	const struct device *const dev = DEVICE_DT_GET_ONE(panasonic_sngcja5);
+
+	bt_conn_cb_register(&conn_callbacks);
+
+	bt_enable(NULL);
+
+	bt_nus_init(NULL);
+
+	bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
 
 	while (42)
 	{
