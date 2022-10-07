@@ -1,0 +1,10 @@
+&arduino_i2c {
+	status = "okay";
+
+	sngcja5@33 {
+        label = "sngcja5";
+		compatible = "panasonic,sngcja5";
+		reg = <0x33>;
+		status = "okay";
+	};
+};
