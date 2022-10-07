@@ -30,6 +30,8 @@ void main(void)
 		printk("pm1_0: %i.%i\n", sensor_values[6].val1, sensor_values[6].val2);
 		printk("pm2_5: %i.%i\n", sensor_values[7].val1, sensor_values[7].val2);
 		printk("pm10_0: %i.%i\n", sensor_values[8].val1, sensor_values[8].val2);
+
+		k_msleep(1000);
 	}
 	
 }
