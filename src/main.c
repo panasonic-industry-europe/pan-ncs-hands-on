@@ -49,6 +49,10 @@ static struct bt_conn_cb conn_callbacks = {
 
 void main(void)
 {
+	/*Databuffer for nus output message*/
+	uint8_t sendBuffer[200];
+	uint16_t messageLength = 0;
+
 	printk("Hello World! %s\n", CONFIG_BOARD);
 
 	const struct device *const dev = DEVICE_DT_GET_ONE(panasonic_sngcja5);
@@ -66,6 +70,15 @@ void main(void)
 		sensor_sample_fetch(dev);
 		sensor_channel_get(dev, SENSOR_CHAN_ALL, &sensor_values);
 
+		memset(sendBuffer, 0, sizeof(sendBuffer));
+
+		messageLength = sprintf( sendBuffer, "PM1.0:%i.%i;PM2.5:%i.%i;PM10:%i.%i", \
+						sensor_values[6].val1, sensor_values[6].val2,				\
+						sensor_values[7].val1, sensor_values[7].val2,				\
+						sensor_values[8].val1, sensor_values[8].val2);
+
+		bt_nus_send(current_conn, &sendBuffer[0], messageLength);
+
 		printk("pc0_5: %i.%i\n", sensor_values[0].val1, sensor_values[0].val2);
 		printk("pc1_0: %i.%i\n", sensor_values[1].val1, sensor_values[1].val2);
 		printk("pc2_5: %i.%i\n", sensor_values[2].val1, sensor_values[2].val2);
@@ -75,6 +88,8 @@ void main(void)
 		printk("pm1_0: %i.%i\n", sensor_values[6].val1, sensor_values[6].val2);
 		printk("pm2_5: %i.%i\n", sensor_values[7].val1, sensor_values[7].val2);
 		printk("pm10_0: %i.%i\n", sensor_values[8].val1, sensor_values[8].val2);
+
+		k_msleep(1000);
 	}
 	
 }
