@@ -1,95 +1,55 @@
 /*
- * Copyright (c) 2012-2014 Wind River Systems, Inc.
+ * Copyright (c) 2022, Panasonic Industrial Devices Europe GmbH
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <zephyr/zephyr.h>
-#include <zephyr/drivers/sensor.h>
-#include <zephyr/device.h>
-#include <bluetooth/services/nus.h>
+#include <zephyr/types.h>
+#include <stddef.h>
+#include <sys/printk.h>
+#include <sys/util.h>
 
-static struct sensor_value sensor_values[9];
+#include <bluetooth/bluetooth.h>
+#include <bluetooth/hci.h>
 
-#define DEVICE_NAME CONFIG_BT_DEVICE_NAME
-#define DEVICE_NAME_LEN	(sizeof(DEVICE_NAME) - 1)
+#define BT_GAP_ADV_BEACON_INT_MIN                 0x0640 * 4  /* 1 s      */
+#define BT_GAP_ADV_BEACON_INT_MAX                 0x0780 * 4  /* 1.2 s    */
 
+#define BT_LE_ADV_NCONN_BEACON BT_LE_ADV_PARAM(0, BT_GAP_ADV_BEACON_INT_MIN, BT_GAP_ADV_BEACON_INT_MAX, NULL)
+
+/*
+ * Set iBeacon demo advertisement data. These values are for
+ * demonstration only and must be changed for production environments!
+ *
+ * UUID:  18ee1516-016b-4bec-ad96-bcb96d166e97
+ * Major: 0
+ * Minor: 0
+ * RSSI:  -56 dBm
+ */
 static const struct bt_data ad[] = {
-	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-	BT_DATA(BT_DATA_NAME_COMPLETE, DEVICE_NAME, DEVICE_NAME_LEN),
+	BT_DATA_BYTES(BT_DATA_FLAGS, BT_LE_AD_NO_BREDR),
+	BT_DATA_BYTES(BT_DATA_UUID128_ALL, 0xa8, 0x58, 0x0b, 0x1f, 0x43, 0x02, 0x7d, 0xab, 0xfe, 0x4f, 0xf1, 0x64, 0x6f, 0x53, 0xad, 0x61),
+	BT_DATA_BYTES(BT_DATA_MANUFACTURER_DATA,
+		      0x3a, 0x00, /* Panasonic */)
 };
 
-static const struct bt_data sd[] = {
-	BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_NUS_VAL),
-};
-
-static struct bt_conn *current_conn = NULL;
-
-static void connected(struct bt_conn *conn, uint8_t err)
+static void bt_ready(int err)
 {
 	if (err) {
-		printk("Connection failed (err %u)", err);
 		return;
 	}
-	printk("Connected");
-	current_conn = bt_conn_ref(conn);
-}
 
-static void disconnected(struct bt_conn *conn, uint8_t reason)
-{
-	printk("Disconnected (reason %u)", reason);
-	bt_conn_unref(current_conn);
-	current_conn = NULL;
+	/* Start advertising */
+	err = bt_le_adv_start(BT_LE_ADV_NCONN_BEACON, ad, ARRAY_SIZE(ad), NULL, 0);
+	if (err) {
+		return;
+	}
 }
-
-static struct bt_conn_cb conn_callbacks = {
-	.connected = connected,
-	.disconnected = disconnected
-};
 
 void main(void)
 {
-	/*Databuffer for nus output message*/
-	uint8_t sendBuffer[200];
-	uint16_t messageLength = 0;
+	int err;
 
-	printk("Hello World! %s\n", CONFIG_BOARD);
-
-	const struct device *const dev = DEVICE_DT_GET_ONE(panasonic_sngcja5);
-
-	bt_conn_cb_register(&conn_callbacks);
-
-	bt_enable(NULL);
-
-	bt_nus_init(NULL);
-
-	bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
-
-	while (42)
-	{
-		sensor_sample_fetch(dev);
-		sensor_channel_get(dev, SENSOR_CHAN_ALL, &sensor_values);
-
-		memset(sendBuffer, 0, sizeof(sendBuffer));
-
-		messageLength = sprintf( sendBuffer, "PM1.0:%i.%i;PM2.5:%i.%i;PM10:%i.%i", \
-						sensor_values[6].val1, sensor_values[6].val2,				\
-						sensor_values[7].val1, sensor_values[7].val2,				\
-						sensor_values[8].val1, sensor_values[8].val2);
-
-		bt_nus_send(current_conn, &sendBuffer[0], messageLength);
-
-		printk("pc0_5: %i.%i\n", sensor_values[0].val1, sensor_values[0].val2);
-		printk("pc1_0: %i.%i\n", sensor_values[1].val1, sensor_values[1].val2);
-		printk("pc2_5: %i.%i\n", sensor_values[2].val1, sensor_values[2].val2);
-		printk("pc5_0: %i.%i\n", sensor_values[3].val1, sensor_values[3].val2);
-		printk("pc7_5: %i.%i\n", sensor_values[4].val1, sensor_values[4].val2);
-		printk("pc10_0: %i.%i\n", sensor_values[5].val1, sensor_values[5].val2);
-		printk("pm1_0: %i.%i\n", sensor_values[6].val1, sensor_values[6].val2);
-		printk("pm2_5: %i.%i\n", sensor_values[7].val1, sensor_values[7].val2);
-		printk("pm10_0: %i.%i\n", sensor_values[8].val1, sensor_values[8].val2);
-
-		k_msleep(1000);
-	}
-	
+	/* Initialize the Bluetooth Subsystem */
+	err = bt_enable(bt_ready);
 }
